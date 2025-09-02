@@ -25,5 +25,5 @@ crewai
 speechrecognition
 gtts
 sentence-transformers
-faiss-gpu
+faiss-cpu
 PyAudio
