@@ -1,18 +1,29 @@
+# Core packages
 streamlit==1.32.0
 boto3==1.34.0
 groq==0.3.0
+python-dotenv==1.0.0
+
+# LangChain ecosystem
 langchain==0.1.0
 langchain-community==0.0.10
 langchain-text-splitters==0.0.1
-faiss-cpu
+
+# Machine Learning & AI
+torch==2.0.1
+transformers==4.35.0
+sentence-transformers==2.2.2
+faiss-cpu==1.7.4  # Compatible avec torch & numpy récents
+numpy>=1.25.0,<2.0
+
+# Audio & Speech
 gtts==2.3.2
 SpeechRecognition==3.10.0
 pydub==0.25.1
-pyaudio==0.2.13
-openai-whisper==20231117
-sentence-transformers==2.2.2
-transformers==4.35.0
-torch==2.0.1
-numpy==1.24.3
+pyaudio==0.2.13  # Si Python <=3.12, sinon remplace par sounddevice
+
+# PDF & Utilities
 pypdf==3.17.0
-python-dotenv==1.0.0
+
+# Whisper for speech-to-text
+openai-whisper==20231117
