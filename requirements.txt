@@ -22,7 +22,7 @@ coverage==7.4.0
 pydantic==2.10.4
 langchain_groq
 crewai
-speech_recognition
+speechrecognition
 gtts
 sentence-transformers
 faiss-gpu
