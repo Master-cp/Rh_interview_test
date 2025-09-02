@@ -26,4 +26,4 @@ speechrecognition
 gtts
 sentence-transformers
 faiss-cpu
-PyAudio
+pyaudio==0.2.13
