@@ -3,7 +3,7 @@ boto3==1.34.0
 groq>=0.4.0
 python-dotenv==1.0.0
 langchain==0.2.10
-langchain-community==0.2.10
+langchain-community>=0.1.0
 langchain-text-splitters==0.2.0
 transformers==4.35.0
 sentence-transformers==2.2.2
@@ -12,3 +12,5 @@ numpy<2.0,>=1.25.0
 gtts==2.3.2
 SpeechRecognition==3.10.0
 pydub==0.25.1
+pypdf>=3.0.0
+
