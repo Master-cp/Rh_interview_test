@@ -4,7 +4,7 @@ groq==0.3.0
 langchain==0.1.0
 langchain-community==0.0.10
 langchain-text-splitters==0.0.1
-faiss-cpu==1.7.4
+faiss-cpu
 gtts==2.3.2
 SpeechRecognition==3.10.0
 pydub==0.25.1
