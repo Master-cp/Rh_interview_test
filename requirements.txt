@@ -12,7 +12,7 @@ langchain-text-splitters==0.0.1
 # Machine Learning & AI
 transformers==4.35.0
 sentence-transformers==2.2.2
-faiss-cpu==1.7.4  # Compatible avec torch & numpy récents
+faiss-cpu==1.8.0 # Compatible avec torch & numpy récents
 numpy>=1.25.0,<2.0
 
 # Audio & Speech
