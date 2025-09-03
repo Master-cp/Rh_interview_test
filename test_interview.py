@@ -405,49 +405,37 @@ def text_to_speech(text):
         print(f"Erreur lors de la synthèse vocale: {e}")
         return None
 
-def speech_to_text():
+def speech_to_text(audio_data):
     """Reconnaissance vocale via l'audio input de Streamlit"""
-    st.info("🎤 Enregistrez votre réponse (5 secondes maximum)")
-    
-    # Utilisation de st.audio_input
-    audio_data = st.audio_input(
-        "Parlez maintenant:",
-        key="audio_recorder",
-        help="Cliquez pour enregistrer votre réponse vocale (5s max)"
-    )
-    
-    if audio_data is not None:
-        try:
-            # Vérifier la taille du fichier audio (éviter les fichiers vides)
-            if len(audio_data.getvalue()) < 1000:  # Moins de 1KB = probablement vide
-                return "Audio trop court. Veuillez réessayer."
-            
-            # Sauvegarder temporairement
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
-                tmp_file.write(audio_data.getvalue())
-                tmp_path = tmp_file.name
-            
-            # Transcription avec Whisper
-            with open(tmp_path, "rb") as file:
-                transcription = client.audio.transcriptions.create(
-                    file=(tmp_path, file.read()),
-                    model="whisper-large-v3-turbo",
-                    response_format="text",
-                    language="fr"
-                )
-            
-            # Nettoyage
-            os.unlink(tmp_path)
-            
-            if transcription and transcription.strip():
-                return transcription
-            else:
-                return "Aucune parole détectée. Veuillez réessayer."
-            
-        except Exception as e:
-            return f"Erreur technique: {str(e)}"
-    
-    return None
+    try:
+        # Vérifier la taille du fichier audio (éviter les fichiers vides)
+        if len(audio_data.getvalue()) < 1000:  # Moins de 1KB = probablement vide
+            return "Audio trop court. Veuillez réessayer."
+        
+        # Sauvegarder temporairement
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
+            tmp_file.write(audio_data.getvalue())
+            tmp_path = tmp_file.name
+        
+        # Transcription avec Whisper
+        with open(tmp_path, "rb") as file:
+            transcription = client.audio.transcriptions.create(
+                file=(tmp_path, file.read()),
+                model="whisper-large-v3-turbo",
+                response_format="text",
+                language="fr"
+            )
+        
+        # Nettoyage
+        os.unlink(tmp_path)
+        
+        if transcription and transcription.strip():
+            return transcription
+        else:
+            return "Aucune parole détectée. Veuillez réessayer."
+        
+    except Exception as e:
+        return f"Erreur technique: {str(e)}"
 
 # ------------------------------------------------------------
 # INTERFACE UTILISATEUR AMÉLIORÉE
@@ -571,7 +559,6 @@ def main():
             st.subheader("🎯 Mode réponse")
             input_mode = st.radio("Choisissez:", ["📝 Texte", "🎤 Vocal"], index=0, key="input_mode")
 
-        # Gestion des réponses
         if st.session_state.waiting_for_response:
             st.write("---")
             st.subheader("💬 Votre réponse")
@@ -581,16 +568,17 @@ def main():
             if input_mode == "🎤 Vocal":
                 st.info("🎤 Utilisez votre microphone pour répondre")
                 
-                # Enregistrement audio
+                # Enregistrement audio avec une clé unique basée sur le temps
+                unique_key = f"audio_recorder_{time.time()}"
                 audio_data = st.audio_input(
                     "Parlez maintenant:",
-                    key="audio_recorder",
+                    key=unique_key,
                     help="Cliquez pour enregistrer votre réponse"
                 )
                 
                 if audio_data:
                     with st.spinner("Transcription en cours..."):
-                        user_input = speech_to_text()
+                        user_input = speech_to_text(audio_data)
                         if user_input and not user_input.startswith("Erreur"):
                             st.success("✅ Transcription réussie!")
                             st.write(f"**Transcription :** {user_input}")
@@ -600,13 +588,13 @@ def main():
                 user_input = st.text_area(
                     "Votre réponse:",
                     height=150,
-                    key="text_response",
+                    key=f"text_response_{time.time()}",
                     placeholder="Écrivez votre réponse ici..."
                 )
             
-            # Bouton de soumission
-            if user_input and st.button("✅ Soumettre la réponse", type="primary", key="submit_response"):
-                # Vérifier si le candidat veut arrêter
+            # Bouton de soumission avec clé unique
+            if user_input and st.button("✅ Soumettre la réponse", type="primary", key=f"submit_{time.time()}"):
+                        # Vérifier si le candidat veut arrêter
                 if st.session_state.agent.check_candidate_cannot_continue(user_input):
                     st.warning("Le candidat a demandé d'arrêter l'entretien.")
                     st.session_state.agent.phase = "evaluation"
