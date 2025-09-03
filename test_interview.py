@@ -376,12 +376,15 @@ def speech_to_text():
                     response_format="verbose_json",
                     language="fr"
                 )
+                # Nettoyer le fichier temporaire
+                os.unlink(tmp_path)
 
+                # Effacer l'audio du widget pour permettre un nouvel enregistrement
+                st.session_state.pop("audio_input", None)
             return transcription.text or "Aucune parole détectée. Veuillez réessayer."
         except Exception as e:
             return f"Erreur lors de la transcription: {e}"
-        finally:
-            os.unlink(tmp_path)
+
 # ------------------------------------------------------------
 # INTERFACE UTILISATEUR AMÉLIORÉE
 # ------------------------------------------------------------
