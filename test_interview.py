@@ -360,7 +360,7 @@ def text_to_speech(text):
 def speech_to_text():
     """Reconnaissance vocale via l'enregistrement audio (Streamlit + Whisper)"""
     st.info("🎤 Enregistrez votre réponse vocale")
-        audio_input = st.audio_input("Cliquez pour démarrer l'enregistrement")
+    audio_input = st.audio_input("Cliquez pour démarrer l'enregistrement")
     if audio_input:
         st.audio(audio_input, format="audio/wav")
         # Sauvegarde temporaire du fichier audio
