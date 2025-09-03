@@ -15,7 +15,6 @@ import os
 import time
 import json
 import numpy as np
-from streamlit_audio_recorder import audio_recorder
 
 # Initialisation du client Polly
 polly_client = boto3.client('polly',
