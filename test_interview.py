@@ -386,6 +386,9 @@ def speech_to_text():
             return transcription.text or "Aucune parole détectée. Veuillez réessayer."
     except Exception as e:
             return f"Erreur lors de la transcription: {e}"
+    os.unlink(tmp_path)
+    st.session_state.audio_data = None
+    st.rerun()
 
         
 # ------------------------------------------------------------
