@@ -14,9 +14,7 @@ import speech_recognition as sr
 import os
 import time
 import json
-import sounddevice as sd
 import numpy as np
-from scipy.io.wavfile import write
 from streamlit_audio_recorder import audio_recorder
 
 # Initialisation du client Polly
