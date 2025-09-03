@@ -356,54 +356,34 @@ def text_to_speech(text):
     except Exception as e:
         print(f"Erreur lors de la synthèse vocale: {e}")
         return None
-
+#############################################################################
 def speech_to_text():
-    """Reconnaissance vocale via l'enregistrement audio"""
+    """Reconnaissance vocale via l'enregistrement audio (Streamlit + Whisper)"""
     st.info("🎤 Enregistrez votre réponse vocale")
-    # Utilisation de audiorecorder pour l'enregistrement vocal
-    audio = audiorecorder(
-                          start_prompt="Start recording",
-                          stop_prompt="Stop recording",
-                          pause_prompt="",
-                          custom_style={'color': 'black'},
-                          start_style={},
-                          pause_style={},
-                          stop_style={},
-                          show_visualizer=True,
-                          key=None)
     
-     # Afficher l'audio enregistré
-    st.audio(audio.export().read())
-    if audio is not None and len(audio) > 0:
+    # Option 1 : utiliser st.audio_input (Streamlit 1.49+)
+    audio_input = st.audio_input("Cliquez pour démarrer l'enregistrement")
+    if audio_input:
+        st.audio(audio_input, format="audio/wav")
+        # Sauvegarde temporaire du fichier audio
+        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+        tmp_file.write(audio_input.getvalue())
+        tmp_file.flush()
+        tmp_path = tmp_file.name
         try:
-            # Sauvegarder temporairement les données audio
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
-                audio.export(tmp_file.name, format="wav")
-                tmp_path = tmp_file.name
-
-           
-
-            # Transcription avec Whisper
-            with open(tmp_path, "rb") as file:
+            with open(tmp_path, "rb") as f:
                 transcription = client.audio.transcriptions.create(
-                    file=(tmp_path, file.read()),
+                    file=f,
                     model="whisper-large-v3-turbo",
                     response_format="text",
                     language="fr"
                 )
-
-            # Nettoyage du fichier temporaire
-            os.unlink(tmp_path)
-
-            if transcription.strip():
-                return transcription
-            else:
-                return "Aucune parole détectée. Veuillez réessayer."
-
+            result = transcription.text.strip()
+            return result or "Aucune parole détectée. Veuillez réessayer."
         except Exception as e:
-            return f"Erreur lors de la transcription: {str(e)}"
-
-    return "En attente d'un enregistrement audio..."
+            return f"Erreur lors de la transcription: {e}"
+        finally:
+            os.unlink(tmp_path)
 # ------------------------------------------------------------
 # INTERFACE UTILISATEUR AMÉLIORÉE
 # ------------------------------------------------------------
