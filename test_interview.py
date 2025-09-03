@@ -358,25 +358,24 @@ def text_to_speech(text):
         return None
 
 def speech_to_text():
-    """Reconnaissance vocale via upload de fichier audio"""
+    """Reconnaissance vocale via l'audio input de Streamlit"""
     import tempfile
-    import io
+    from audiorecorder import audiorecorder
     
-    st.info("🎤 Méthode alternative: Enregistrez votre voix avec l'application de votre téléphone, puis uploader le fichier audio")    
-    # Code pour l'enregistrement vocal via le navigateur
-    audio_bytes = audio_recorder(
-        text="Cliquez pour enregistrer",
-        recording_color="#e8b62c",
-        neutral_color="#6aa36f",
-        icon_name="microphone",
-        icon_size="2x",
+    st.info("🎤 Utilisez le microphone de votre navigateur pour enregistrer votre réponse")
+    
+    # Utilisation de st.audio_input pour l'enregistrement vocal
+    audio_data = st.audio_input(
+        "Parlez maintenant:",
+        key="audio_recorder",
+        help="Cliquez sur le microphone pour enregistrer votre réponse"
     )
     
-    if audio_bytes:
+    if audio_data is not None:
         try:
-            # Convertir les bytes en fichier audio temporaire
+            # Sauvegarder temporairement les données audio
             with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
-                tmp_file.write(audio_bytes)
+                tmp_file.write(audio_data.getvalue())
                 tmp_path = tmp_file.name
             
             # Transcription avec Whisper
@@ -388,13 +387,18 @@ def speech_to_text():
                     language="fr"
                 )
             
+            # Nettoyage du fichier temporaire
             os.unlink(tmp_path)
-            return transcription
+            
+            if transcription.strip():
+                return transcription
+            else:
+                return "Aucune parole détectée. Veuillez réessayer."
             
         except Exception as e:
             return f"Erreur lors de la transcription: {str(e)}"
     
-    return "En attente d'un fichier audio..."
+    return "En attente d'un enregistrement audio..."
 # ------------------------------------------------------------
 # INTERFACE UTILISATEUR AMÉLIORÉE
 # ------------------------------------------------------------
