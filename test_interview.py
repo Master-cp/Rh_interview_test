@@ -356,17 +356,21 @@ def text_to_speech(text):
 
 def speech_to_text():
     """Reconnaissance vocale via l'audio input de Streamlit"""
-    st.info("🎤 Enregistrez votre réponse (fonctionnalité en développement)")
+    st.info("🎤 Enregistrez votre réponse (5 secondes maximum)")
     
     # Utilisation de st.audio_input
     audio_data = st.audio_input(
         "Parlez maintenant:",
         key="audio_recorder",
-        help="Cliquez pour enregistrer votre réponse vocale"
+        help="Cliquez pour enregistrer votre réponse vocale (5s max)"
     )
     
     if audio_data is not None:
         try:
+            # Vérifier la taille du fichier audio (éviter les fichiers vides)
+            if len(audio_data.getvalue()) < 1000:  # Moins de 1KB = probablement vide
+                return "Audio trop court. Veuillez réessayer."
+            
             # Sauvegarder temporairement
             with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
                 tmp_file.write(audio_data.getvalue())
@@ -384,7 +388,7 @@ def speech_to_text():
             # Nettoyage
             os.unlink(tmp_path)
             
-            if transcription.strip():
+            if transcription and transcription.strip():
                 return transcription
             else:
                 return "Aucune parole détectée. Veuillez réessayer."
@@ -410,6 +414,9 @@ def main():
     
     if "waiting_for_response" not in st.session_state:
         st.session_state.waiting_for_response = False
+    
+    if "audio_recorded" not in st.session_state:
+        st.session_state.audio_recorded = False
     
     # Sidebar avec configuration
     with st.sidebar:
@@ -470,51 +477,80 @@ def main():
                     st.json(profile)
             
             st.subheader("🎯 Mode réponse")
-            input_mode = st.radio("Choisissez:", ["📝 Texte"], index=0)
+            input_mode = st.radio("Choisissez:", ["🎤 Vocal", "📝 Texte"], index=0, key="input_mode")
 
         # Gestion des réponses
         if st.session_state.waiting_for_response:
             user_input = None
             
             if input_mode == "🎤 Vocal":
-                user_input = speech_to_text()
-                if user_input and user_input != "En attente d'un enregistrement audio...":
-                    st.success("Transcription réussie!")
-                    st.write(f"**Vous avez dit :** {user_input}")
-            else:
-                user_input = st.chat_input("Tapez votre réponse ici...")
-            
-            if user_input and not user_input.startswith("Erreur"):
-                # Vérifier si le candidat veut arrêter
-                if st.session_state.agent.check_candidate_cannot_continue(user_input):
-                    st.warning("Le candidat a demandé d'arrêter l'entretien.")
-                    st.session_state.agent.phase = "evaluation"
-                    st.rerun()
-                    return
+                # Réinitialiser l'état audio si on vient de changer de mode
+                if st.session_state.get('last_input_mode') != "🎤 Vocal":
+                    st.session_state.audio_recorded = False
+                    st.session_state.last_input_mode = "🎤 Vocal"
                 
-                # Traitement de la réponse
-                st.session_state.agent.history.append(("candidat", user_input))
-                st.session_state.messages.append({"role": "user", "content": user_input})
-                st.session_state.waiting_for_response = False
-                
-                # Génération question suivante
-                with st.spinner("🔍 Analyse et génération de la prochaine question..."):
-                    evaluation = st.session_state.agent.evaluate_response(user_input)
-                    question = st.session_state.agent.generate_contextual_question(user_input)
+                if not st.session_state.audio_recorded:
+                    user_input = speech_to_text()
                     
-                    # Vérifier si c'est le message de remerciement final
-                    if "merci beaucoup" in question.lower() or "évaluation finale" in question.lower():
-                        st.session_state.agent.add_system_message(question)
+                    if user_input and user_input != "En attente d'un enregistrement audio...":
+                        if user_input.startswith("Erreur") or user_input == "Aucune parole détectée. Veuillez réessayer.":
+                            st.warning(user_input)
+                        else:
+                            st.success("Transcription réussie!")
+                            st.write(f"**Vous avez dit :** {user_input}")
+                            st.session_state.audio_recorded = True
+                            
+                            # Bouton pour confirmer ou réenregistrer
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                if st.button("✅ Utiliser cette transcription", type="primary"):
+                                    pass  # Le traitement se fera plus bas
+                            with col2:
+                                if st.button("🔄 Réenregistrer"):
+                                    st.session_state.audio_recorded = False
+                                    st.rerun()
+                else:
+                    # Utiliser la transcription déjà effectuée
+                    user_input = st.session_state.get('last_transcription', '')
+            
+            else:  # Mode Texte
+                user_input = st.chat_input("Tapez votre réponse ici...")
+                st.session_state.last_input_mode = "📝 Texte"
+            
+            # Traitement de la réponse lorsque l'utilisateur a fourni une entrée
+            if user_input and not user_input.startswith("Erreur") and user_input != "Aucune parole détectée. Veuillez réessayer.":
+                if st.button("✅ Soumettre la réponse", type="primary") or input_mode == "📝 Texte":
+                    # Vérifier si le candidat veut arrêter
+                    if st.session_state.agent.check_candidate_cannot_continue(user_input):
+                        st.warning("Le candidat a demandé d'arrêter l'entretien.")
                         st.session_state.agent.phase = "evaluation"
-                    else:
-                        st.session_state.agent.add_system_message(question)
-                
-                # Affichage feedback
-                with st.expander("📝 Feedback immédiat", expanded=True):
-                    st.info(evaluation)
-                
-                st.session_state.waiting_for_response = True
-                st.rerun()
+                        st.rerun()
+                        return
+                    
+                    # Traitement de la réponse
+                    st.session_state.agent.history.append(("candidat", user_input))
+                    st.session_state.messages.append({"role": "user", "content": user_input})
+                    st.session_state.waiting_for_response = False
+                    st.session_state.audio_recorded = False
+                    
+                    # Génération question suivante
+                    with st.spinner("🔍 Analyse et génération de la prochaine question..."):
+                        evaluation = st.session_state.agent.evaluate_response(user_input)
+                        question = st.session_state.agent.generate_contextual_question(user_input)
+                        
+                        # Vérifier si c'est le message de remerciement final
+                        if "merci beaucoup" in question.lower() or "évaluation finale" in question.lower():
+                            st.session_state.agent.add_system_message(question)
+                            st.session_state.agent.phase = "evaluation"
+                        else:
+                            st.session_state.agent.add_system_message(question)
+                    
+                    # Affichage feedback
+                    with st.expander("📝 Feedback immédiat", expanded=True):
+                        st.info(evaluation)
+                    
+                    st.session_state.waiting_for_response = True
+                    st.rerun()
 
         # Bouton terminer
         if st.session_state.waiting_for_response:
