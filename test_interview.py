@@ -371,8 +371,9 @@ def speech_to_text():
                           stop_style={},
                           show_visualizer=True,
                           key=None)
+    
      # Afficher l'audio enregistré
-     st.audio(audio.export().read())
+    st.audio(audio.export().read())
     if audio is not None and len(audio) > 0:
         try:
             # Sauvegarder temporairement les données audio
