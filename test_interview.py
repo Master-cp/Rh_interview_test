@@ -17,6 +17,7 @@ import json
 import sounddevice as sd
 import numpy as np
 from scipy.io.wavfile import write
+from streamlit_audio_recorder import audio_recorder
 
 # Initialisation du client Polly
 polly_client = boto3.client('polly',
@@ -359,101 +360,44 @@ def text_to_speech(text):
         return None
 
 def speech_to_text():
-    """Reconnaissance vocale précise avec Whisper via Groq API avec détection de silence"""
-    import sounddevice as sd
-    import numpy as np
-    from scipy.io.wavfile import write
+    def speech_to_text():
+    """Reconnaissance vocale via upload de fichier audio"""
     import tempfile
-    import time
+    import io
     
-    try:
-        st.info("🎤 Parlez maintenant... (arrêt automatique après 2 secondes de silence)")
-        
-        # Configuration de l'enregistrement
-        sample_rate = 16000  # Fréquence d'échantillonnage réduite pour Whisper
-        silence_threshold = 0.01  # Seuil de silence
-        silence_duration = 2.0  # Durée de silence pour arrêt (secondes)
-        max_duration = 30.0  # Durée maximale d'enregistrement (secondes)
-        
-        audio_data = []
-        silence_start_time = None
-        start_time = time.time()
-        
-        # Fonction de callback pour l'enregistrement
-        def audio_callback(indata, frames, time_info, status):
-            nonlocal silence_start_time
-            if status:
-                print(f"Status: {status}")
-            
-            # Calcul du volume RMS (Root Mean Square)
-            rms = np.sqrt(np.mean(indata**2))
-            
-            # Ajouter les données audio
-            audio_data.append(indata.copy())
-            
-            # Détection de silence
-            if rms < silence_threshold:
-                if silence_start_time is None:
-                    silence_start_time = time.time()
-                elif time.time() - silence_start_time >= silence_duration:
-                    raise sd.CallbackStop()  # Arrêter l'enregistrement
-            else:
-                silence_start_time = None  # Réinitialiser le timer de silence
-        
-        # Démarrer l'enregistrement avec callback
-        stream = sd.InputStream(
-            samplerate=sample_rate,
-            channels=1,
-            dtype='float32',
-            callback=audio_callback,
-            blocksize=int(sample_rate * 0.1)  # Blocs de 100ms
-        )
-        
-        with stream:
-            # Attendre jusqu'à la durée maximale ou arrêt par callback
-            while time.time() - start_time < max_duration:
-                time.sleep(0.1)
-                if not stream.active:
-                    break
-        
-        # Convertir les données audio en tableau numpy
-        if audio_data:
-            audio_array = np.concatenate(audio_data, axis=0)
-            
-            # Sauvegarde temporaire du fichier audio
+    st.info("🎤 Méthode alternative: Enregistrez votre voix avec l'application de votre téléphone, puis uploader le fichier audio")    
+    # Code pour l'enregistrement vocal via le navigateur
+    audio_bytes = audio_recorder(
+        text="Cliquez pour enregistrer",
+        recording_color="#e8b62c",
+        neutral_color="#6aa36f",
+        icon_name="microphone",
+        icon_size="2x",
+    )
+    
+    if audio_bytes:
+        try:
+            # Convertir les bytes en fichier audio temporaire
             with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
-                write(tmp_file.name, sample_rate, (audio_array * 32767).astype(np.int16))
+                tmp_file.write(audio_bytes)
                 tmp_path = tmp_file.name
             
-            # Vérifier si l'audio n'est pas seulement du silence
-            if np.max(np.abs(audio_array)) > silence_threshold:
-                # Transcription avec Whisper
-                with open(tmp_path, "rb") as file:
-                    transcription = client.audio.transcriptions.create(
-                        file=(tmp_path, file.read()),
-                        model="whisper-large-v3-turbo",
-                        response_format="text",
-                        language="fr"
-                    )
-                
-                # Nettoyage du fichier temporaire
-                os.unlink(tmp_path)
-                
-                if transcription.strip():
-                    return transcription
-                else:
-                    return "Aucune parole détectée. Veuillez réessayer."
-            else:
-                os.unlink(tmp_path)
-                return "Aucun son détecté. Veuillez réessayer."
-        else:
-            return "Aucune donnée audio enregistrée."
-
-    except sd.CallbackStop:
-        # Arrêt normal par détection de silence
-        pass
-    except Exception as e:
-        return f"Erreur: {str(e)}"
+            # Transcription avec Whisper
+            with open(tmp_path, "rb") as file:
+                transcription = client.audio.transcriptions.create(
+                    file=(tmp_path, file.read()),
+                    model="whisper-large-v3-turbo",
+                    response_format="text",
+                    language="fr"
+                )
+            
+            os.unlink(tmp_path)
+            return transcription
+            
+        except Exception as e:
+            return f"Erreur lors de la transcription: {str(e)}"
+    
+    return "En attente d'un fichier audio..."
 # ------------------------------------------------------------
 # INTERFACE UTILISATEUR AMÉLIORÉE
 # ------------------------------------------------------------
