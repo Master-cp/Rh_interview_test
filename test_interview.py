@@ -384,7 +384,7 @@ def speech_to_text():
                 # Effacer l'audio du widget pour permettre un nouvel enregistrement
                 st.session_state.pop("audio_input", None)
             return transcription.text or "Aucune parole détectée. Veuillez réessayer."
-        except Exception as e:
+    except Exception as e:
             return f"Erreur lors de la transcription: {e}"
 
         
