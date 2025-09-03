@@ -4,7 +4,7 @@ import tempfile
 import streamlit as st
 from groq import Groq
 from langchain_community.document_loaders import PyPDFLoader
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.embeddings import HuggingFaceEmbeddings 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from gtts import gTTS
@@ -358,21 +358,21 @@ def text_to_speech(text):
         return None
 
 def speech_to_text():
-     """Reconnaissance vocale via l'enregistrement audio"""
+    """Reconnaissance vocale via l'enregistrement audio"""
     st.info("🎤 Enregistrez votre réponse vocale")
     # Utilisation de audiorecorder pour l'enregistrement vocal
     audio = audiorecorder("🎤 Cliquez pour enregistrer", "⏹️ Cliquez pour arrêter")
-    
+
     if audio is not None and len(audio) > 0:
         try:
             # Sauvegarder temporairement les données audio
             with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
                 audio.export(tmp_file.name, format="wav")
                 tmp_path = tmp_file.name
-            
+
             # Afficher l'audio enregistré
             st.audio(audio.export().read())
-            
+
             # Transcription avec Whisper
             with open(tmp_path, "rb") as file:
                 transcription = client.audio.transcriptions.create(
@@ -381,18 +381,18 @@ def speech_to_text():
                     response_format="text",
                     language="fr"
                 )
-            
+
             # Nettoyage du fichier temporaire
             os.unlink(tmp_path)
-            
+
             if transcription.strip():
                 return transcription
             else:
                 return "Aucune parole détectée. Veuillez réessayer."
-            
+
         except Exception as e:
             return f"Erreur lors de la transcription: {str(e)}"
-    
+
     return "En attente d'un enregistrement audio..."
 # ------------------------------------------------------------
 # INTERFACE UTILISATEUR AMÉLIORÉE
