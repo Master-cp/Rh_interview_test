@@ -362,7 +362,7 @@ def speech_to_text():
     st.info("🎤 Enregistrez votre réponse vocale")
     audio_input = st.audio_input("Cliquez pour démarrer l'enregistrement")
     if audio_input:
-        st.audio(audio_input, format="audio/wav")
+        #st.audio(audio_input, format="audio/wav")
         # Sauvegarde temporaire du fichier audio
         tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
         tmp_file.write(audio_input.getvalue())
