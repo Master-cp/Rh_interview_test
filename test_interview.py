@@ -387,10 +387,10 @@ def text_to_speech(text):
         
         # Appel AWS Polly API TTS
         response = polly_client.synthesize_speech(
-            Engine='neural',
+            Engine='generative',
             OutputFormat='mp3',
             Text=text,
-            VoiceId='Lea',
+            VoiceId='Liam',
             TextType='text'
         )
         
