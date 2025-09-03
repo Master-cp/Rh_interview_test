@@ -359,38 +359,43 @@ def text_to_speech(text):
 #############################################################################
 def speech_to_text():
     """Reconnaissance vocale via l'enregistrement audio (Streamlit + Whisper)"""
-    st.info("🎤 Enregistrez votre réponse vocale")
-    audio_input = st.audio_input("Cliquez pour démarrer l'enregistrement")
-    if audio_input:
-        #st.audio(audio_input, format="audio/wav")
-        # Sauvegarde temporaire du fichier audio
-        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
-        tmp_file.write(audio_input.getvalue())
-        tmp_file.flush()
-        tmp_path = tmp_file.name
-    try:
-            with open(tmp_path, "rb") as file:
-                transcription = client.audio.transcriptions.create(
-                    file=(tmp_path, file.read()),
-                    model="whisper-large-v3-turbo",
-                    response_format="verbose_json",
-                    language="fr"
-                )
-                # Nettoyer le fichier temporaire
-                os.unlink(tmp_path)
-                st.session_state.audio_data = None
-                st.rerun()
-              
-                # Effacer l'audio du widget pour permettre un nouvel enregistrement
-                st.session_state.pop("audio_input", None)
-            return transcription.text or "Aucune parole détectée. Veuillez réessayer."
-    except Exception as e:
-            return f"Erreur lors de la transcription: {e}"
-    os.unlink(tmp_path)
-    st.session_state.audio_data = None
-    st.rerun()
+    if "audio_captured" not in st.session_state:
+        st.session_state.audio_captured = None
 
-        
+    # Widget d'enregistrement (affiché seulement si rien n'est en cours)
+    if st.session_state.audio_captured is None:
+        audio_input = st.audio_input("🎤 Cliquez pour démarrer l'enregistrement")
+        if audio_input:
+            st.session_state.audio_captured = audio_input
+            st.rerun()
+        return "En attente d'un enregistrement audio..."
+
+    try:
+        # Sauvegarde temporaire
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
+            tmp_file.write(st.session_state.audio_captured.getvalue())
+            tmp_path = tmp_file.name
+
+        # Transcription avec Whisper
+        with open(tmp_path, "rb") as file:
+            transcription = client.audio.transcriptions.create(
+                file=file,
+                model="whisper-1",
+                response_format="text",
+                language="fr"
+            )
+
+        # Nettoyage après transcription
+        os.unlink(tmp_path)
+        st.session_state.audio_captured = None  # Réinitialise pour prochain enregistrement
+
+        # Retourne le texte transcrit
+        return transcription.strip() if transcription.strip() else "Aucune parole détectée. Veuillez réessayer."
+
+    except Exception as e:
+        # Réinitialise en cas d'erreur pour éviter les blocages
+        st.session_state.audio_captured = None
+        return f"Erreur lors de la transcription : {str(e)}"
 # ------------------------------------------------------------
 # INTERFACE UTILISATEUR AMÉLIORÉE
 # ------------------------------------------------------------
