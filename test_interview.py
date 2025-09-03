@@ -338,10 +338,10 @@ def text_to_speech(text):
         
         # Appel AWS Polly API TTS
         response = polly_client.synthesize_speech(
-            Engine='neural',
+            Engine='generative',
             OutputFormat='mp3',
             Text=text,
-            VoiceId='Lea',
+            VoiceId='Liam',
             TextType='text'
         )
         
@@ -357,25 +357,24 @@ def text_to_speech(text):
         return None
 
 def speech_to_text():
-    """Reconnaissance vocale via l'audio input de Streamlit"""
+     """Reconnaissance vocale via l'enregistrement audio"""
     import tempfile
     from audiorecorder import audiorecorder
     
-    st.info("🎤 Utilisez le microphone de votre navigateur pour enregistrer votre réponse")
+    st.info("🎤 Enregistrez votre réponse vocale")
     
-    # Utilisation de st.audio_input pour l'enregistrement vocal
-    audio_data = st.audio_input(
-        "Parlez maintenant:",
-        key="audio_recorder",
-        help="Cliquez sur le microphone pour enregistrer votre réponse"
-    )
+    # Utilisation de audiorecorder pour l'enregistrement vocal
+    audio = audiorecorder("🎤 Cliquez pour enregistrer", "⏹️ Cliquez pour arrêter")
     
-    if audio_data is not None:
+    if audio is not None and len(audio) > 0:
         try:
             # Sauvegarder temporairement les données audio
             with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
-                tmp_file.write(audio_data.getvalue())
+                audio.export(tmp_file.name, format="wav")
                 tmp_path = tmp_file.name
+            
+            # Afficher l'audio enregistré
+            st.audio(audio.export().read())
             
             # Transcription avec Whisper
             with open(tmp_path, "rb") as file:
