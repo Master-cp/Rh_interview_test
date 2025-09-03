@@ -2,7 +2,6 @@ import boto3
 from pathlib import Path
 import tempfile 
 import streamlit as st
-import tempfile
 from groq import Groq
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.embeddings import HuggingFaceEmbeddings
@@ -15,6 +14,8 @@ import os
 import time
 import json
 import numpy as np
+from audiorecorder import audiorecorder
+
 
 # Initialisation du client Polly
 polly_client = boto3.client('polly',
@@ -358,8 +359,6 @@ def text_to_speech(text):
 
 def speech_to_text():
      """Reconnaissance vocale via l'enregistrement audio"""
-    import tempfile
-    from audiorecorder import audiorecorder
     
     st.info("🎤 Enregistrez votre réponse vocale")
     
