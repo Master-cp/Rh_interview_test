@@ -14,5 +14,5 @@ SpeechRecognition==3.10.0
 pydub==0.25.1
 pypdf>=3.0.0
 #pyaudio==0.2.13
-sounddevice
-PortAudio
+streamlit-audio-recorder==0.0.6
+
