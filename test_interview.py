@@ -379,7 +379,7 @@ def speech_to_text():
                 # Nettoyer le fichier temporaire
                 os.unlink(tmp_path)
                 st.session_state.audio_data = None
-                st.experimental_rerun()
+                st.rerun()
               
                 # Effacer l'audio du widget pour permettre un nouvel enregistrement
                 st.session_state.pop("audio_input", None)
