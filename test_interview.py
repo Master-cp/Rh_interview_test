@@ -35,6 +35,7 @@ class RecruitingAgent:
         self.cv_text = ""
         self.evaluations = []
         self.job_summary = {}
+        self.matching_analysis = {}
         self.candidate_profile = {
             "competences_identifiees": [],
             "experiences_cles": [],
@@ -79,23 +80,67 @@ class RecruitingAgent:
         self.job_summary = eval(response.choices[0].message.content)
         return self.job_summary
     
+    def analyze_candidate_profile(self, cv_text, job_description):
+        """Analyse le matching entre le candidat et le poste"""
+        prompt = f"""
+        [PROFIL DU CANDIDAT - CV]
+        {cv_text[:3000]}
+        
+        [DESCRIPTION DU POSTE]
+        {job_description}
+        
+        [INSTRUCTIONS]
+        En tant qu'expert RH, analysez la correspondance entre le candidat et le poste :
+        
+        1. Points forts d'adéquation (compétences correspondantes)
+        2. Points d'écart (compétences manquantes)
+        3. Potentiel de développement
+        4. Recommandations pour l'entretien
+        5. Score d'adéquation sur 100
+        
+        Formattez la réponse en JSON avec ces clés :
+        - "points_forts_adéquation": liste des compétences correspondantes
+        - "points_ecart": liste des compétences manquantes
+        - "potentiel_developpement": analyse du potentiel
+        - "recommandations_entretien": suggestions pour orienter l'entretien
+        - "score_adéquation": score sur 100
+        """
+        
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            response_format={"type": "json_object"}
+        )
+        
+        self.matching_analysis = eval(response.choices[0].message.content)
+        return self.matching_analysis
+    
     def initialize_interview(self, cv_file, job_description):
-        """Initialise l'entretien avec analyse préalable"""
+        """Initialise l'entretien avec analyse préalable complète"""
         self.job_description = job_description
-        self.job_summary = self.analyze_job_description(job_description)
         
         # Traitement des documents
         self.cv_text, self.vector_db = self.process_documents(cv_file, job_description)
+        
+        # Analyses en parallèle
+        self.job_summary = self.analyze_job_description(job_description)
+        self.matching_analysis = self.analyze_candidate_profile(self.cv_text, job_description)
+        
         self.phase = "interview"
         self.question_count = 0
         
-        # Message d'introduction personnalisé
+        # Message d'introduction personnalisé avec analyse
         intro_message = (
             f"**Entretien pour le poste : {self.job_summary['titre']}**\n\n"
-            f"**Compétences recherchées :** {', '.join(self.job_summary['competences_techniques'])}\n"
-            f"**Profil attendu :** {self.job_summary['niveau_experience']} avec {', '.join(self.job_summary['qualites_comportementales'])}\n\n"
-            "Commençons par votre présentation. Pourriez-vous vous décrire en 2 minutes "
-            "en mettant l'accent sur votre adéquation avec ce poste ?"
+            f"**📊 Score de correspondance : {self.matching_analysis['score_adéquation']}/100**\n\n"
+            f"**✅ Points forts d'adéquation :**\n"
+            f"{chr(10).join(['• ' + point for point in self.matching_analysis['points_forts_adéquation'][:3]])}\n\n"
+            f"**🎯 Objectifs de l'entretien :**\n"
+            f"{chr(10).join(['• ' + reco for reco in self.matching_analysis['recommandations_entretien'][:2]])}\n\n"
+            "**💬 Commençons par votre présentation :**\n"
+            "Pourriez-vous vous décrire en 2 minutes en mettant l'accent sur "
+            "votre expérience la plus pertinente pour ce poste ?"
         )
         
         self.add_system_message(intro_message)
@@ -304,6 +349,11 @@ class RecruitingAgent:
         - Points forts: {self.candidate_profile['points_forts']}
         - Motivations: {self.candidate_profile['motivations']}
 
+        ANALYSE DE MATCHING INITIALE:
+        - Score: {self.matching_analysis['score_adéquation']}/100
+        - Points forts: {self.matching_analysis['points_forts_adéquation']}
+        - Points d'écart: {self.matching_analysis['points_ecart']}
+
         HISTORIQUE COMPLET: {json.dumps(self.history, ensure_ascii=False)}
         ÉVALUATIONS: {json.dumps(self.evaluations, ensure_ascii=False)}
 
@@ -314,6 +364,7 @@ class RecruitingAgent:
         3. Points d'amélioration critiques
         4. Recommandations concrètes pour le candidat
         5. Adéquation finale avec le poste (Fort/Moyen/Faible)
+        6. Comparaison avec l'analyse initiale
 
         Structurez avec des sections claires et soyez constructif.
         """
@@ -415,10 +466,8 @@ def main():
     if "waiting_for_response" not in st.session_state:
         st.session_state.waiting_for_response = False
     
-    if "audio_data" not in st.session_state:
-        st.session_state.audio_data = None
-        st.session_state.transcription = None
-        st.session_state.show_transcription = False
+    if "analysis_complete" not in st.session_state:
+        st.session_state.analysis_complete = False
     
     # Sidebar avec configuration
     with st.sidebar:
@@ -430,29 +479,64 @@ def main():
         
         if st.button("🔍 Analyser et démarrer", type="primary", key="start_analysis"):
             if cv_file and job_desc:
-                with st.spinner("Analyse approfondie en cours..."):
-                    st.session_state.agent.initialize_interview(cv_file, job_desc)
-                    st.session_state.waiting_for_response = True
-                    st.session_state.messages = []  # Réinitialiser les messages
-                    
-                # Affichage du résumé
-                st.success("Analyse terminée!")
-                summary = st.session_state.agent.job_summary
-                st.subheader("📋 Fiche de poste")
-                st.json({
-                    "Poste": summary["titre"],
-                    "Compétences": summary["competences_techniques"],
-                    "Qualités": summary["qualites_comportementales"],
-                    "Niveau": summary["niveau_experience"]
-                })
+                # Réinitialiser l'état précédent
+                st.session_state.messages = []
+                st.session_state.waiting_for_response = False
+                st.session_state.analysis_complete = False
                 
-                # Forcer le rerun pour afficher la première question
+                # Analyse préliminaire
+                with st.spinner("📊 Analyse approfondie en cours..."):
+                    try:
+                        st.session_state.agent.initialize_interview(cv_file, job_desc)
+                        st.session_state.analysis_complete = True
+                        st.session_state.waiting_for_response = True
+                        
+                        st.success("✅ Analyse terminée!")
+                        
+                    except Exception as e:
+                        st.error(f"Erreur lors de l'analyse: {str(e)}")
+                
                 st.rerun()
             else:
                 st.error("Veuillez fournir CV et description de poste")
+        
+        # Afficher l'analyse de matching si disponible
+        if st.session_state.analysis_complete and hasattr(st.session_state.agent, 'matching_analysis'):
+            st.write("---")
+            st.subheader("📋 Analyse de correspondance")
+            
+            analysis = st.session_state.agent.matching_analysis
+            st.metric("Score de correspondance", f"{analysis['score_adéquation']}/100")
+            
+            with st.expander("📊 Détails de l'analyse", expanded=False):
+                st.write("**✅ Points forts :**")
+                for point in analysis['points_forts_adéquation'][:3]:
+                    st.success(f"• {point}")
+                
+                st.write("**⚠️ Points d'écart :**")
+                for point in analysis['points_ecart'][:2]:
+                    st.warning(f"• {point}")
+                
+                st.write("**💡 Recommandations :**")
+                for reco in analysis['recommandations_entretien'][:2]:
+                    st.info(f"• {reco}")
     
-    # Zone principale de conversation
-    if st.session_state.agent.phase == "interview":
+    # Zone principale
+    if st.session_state.analysis_complete:
+        # Afficher l'analyse de matching en haut de page
+        analysis = st.session_state.agent.matching_analysis
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric("📊 Score de correspondance", f"{analysis['score_adéquation']}/100")
+        
+        with col2:
+            st.metric("✅ Points forts", len(analysis['points_forts_adéquation']))
+        
+        with col3:
+            st.metric("⚠️ Points d'écart", len(analysis['points_ecart']))
+        
+        # Interface d'entretien
         col1, col2 = st.columns([2, 1])
         
         with col1:
@@ -485,7 +569,7 @@ def main():
                     st.json(profile)
             
             st.subheader("🎯 Mode réponse")
-            input_mode = st.radio("Choisissez:", ["🎤 Vocal", "📝 Texte"], index=0, key="input_mode")
+            input_mode = st.radio("Choisissez:", ["📝 Texte", "🎤 Vocal"], index=0, key="input_mode")
 
         # Gestion des réponses
         if st.session_state.waiting_for_response:
@@ -493,78 +577,23 @@ def main():
             st.subheader("💬 Votre réponse")
             
             user_input = None
-            submit_pressed = False
             
             if input_mode == "🎤 Vocal":
-                # Section enregistrement vocal
                 st.info("🎤 Utilisez votre microphone pour répondre")
                 
                 # Enregistrement audio
                 audio_data = st.audio_input(
                     "Parlez maintenant:",
                     key="audio_recorder",
-                    help="Cliquez pour enregistrer votre réponse (5 secondes max)"
+                    help="Cliquez pour enregistrer votre réponse"
                 )
                 
                 if audio_data:
-                    st.session_state.audio_data = audio_data
-                    st.success("✅ Enregistrement terminé! Cliquez sur 'Transcrire' pour continuer.")
-                    
-                    # Bouton pour transcrire
-                    if st.button("🗣️ Transcrire l'audio", type="primary", key="transcribe_btn"):
-                        with st.spinner("Transcription en cours..."):
-                            try:
-                                # Sauvegarder temporairement
-                                with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
-                                    tmp_file.write(audio_data.getvalue())
-                                    tmp_path = tmp_file.name
-                                
-                                # Transcription avec Whisper
-                                with open(tmp_path, "rb") as file:
-                                    transcription = client.audio.transcriptions.create(
-                                        file=(tmp_path, file.read()),
-                                        model="whisper-large-v3-turbo",
-                                        response_format="text",
-                                        language="fr"
-                                    )
-                                
-                                os.unlink(tmp_path)
-                                
-                                if transcription and transcription.strip():
-                                    st.session_state.transcription = transcription
-                                    st.session_state.show_transcription = True
-                                    st.success("Transcription réussie!")
-                                else:
-                                    st.warning("Aucune parole détectée. Veuillez réessayer.")
-                                    
-                            except Exception as e:
-                                st.error(f"Erreur de transcription: {str(e)}")
-                
-                # Afficher la transcription si disponible
-                if st.session_state.show_transcription and st.session_state.transcription:
-                    st.write("**Transcription :**")
-                    st.info(st.session_state.transcription)
-                    
-                    # Éditer la transcription si nécessaire
-                    edited_transcription = st.text_area(
-                        "Modifiez la transcription si besoin:",
-                        value=st.session_state.transcription,
-                        height=100,
-                        key="edit_transcription"
-                    )
-                    
-                    # Boutons pour soumettre ou réenregistrer
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        if st.button("✅ Utiliser cette réponse", type="primary", key="use_audio_response"):
-                            user_input = edited_transcription
-                            submit_pressed = True
-                    with col2:
-                        if st.button("🔄 Réenregistrer", key="rerecord_btn"):
-                            st.session_state.audio_data = None
-                            st.session_state.transcription = None
-                            st.session_state.show_transcription = False
-                            st.rerun()
+                    with st.spinner("Transcription en cours..."):
+                        user_input = speech_to_text()
+                        if user_input and not user_input.startswith("Erreur"):
+                            st.success("✅ Transcription réussie!")
+                            st.write(f"**Transcription :** {user_input}")
             
             else:  # Mode Texte
                 st.info("📝 Tapez votre réponse ci-dessous")
@@ -574,12 +603,9 @@ def main():
                     key="text_response",
                     placeholder="Écrivez votre réponse ici..."
                 )
-                
-                if st.button("✅ Soumettre la réponse", type="primary", key="submit_text_btn"):
-                    submit_pressed = True
             
-            # Traitement de la réponse lorsqu'elle est soumise
-            if submit_pressed and user_input:
+            # Bouton de soumission
+            if user_input and st.button("✅ Soumettre la réponse", type="primary", key="submit_response"):
                 # Vérifier si le candidat veut arrêter
                 if st.session_state.agent.check_candidate_cannot_continue(user_input):
                     st.warning("Le candidat a demandé d'arrêter l'entretien.")
@@ -593,9 +619,6 @@ def main():
                 
                 # Désactiver l'attente de réponse pendant le traitement
                 st.session_state.waiting_for_response = False
-                st.session_state.audio_data = None
-                st.session_state.transcription = None
-                st.session_state.show_transcription = False
                 
                 # Génération question suivante
                 with st.spinner("🔍 Analyse de votre réponse et génération de la prochaine question..."):
@@ -668,13 +691,16 @@ def main():
         4. 🎤 Répondez aux questions avec votre voix ou par texte
         """)
         
-        # Section démo vocale
-        with st.expander("🎤 Testez votre microphone", expanded=False):
-            st.info("Vérifiez que votre microphone fonctionne correctement")
-            test_audio = st.audio_input("Test d'enregistrement", key="test_mic")
-            if test_audio:
-                st.audio(test_audio)
-                st.success("✅ Microphone fonctionnel!")
+        # Section démo
+        with st.expander("ℹ️ Comment ça fonctionne", expanded=False):
+            st.write("""
+            **L'assistant va :**
+            1. Analyser votre CV et l'offre d'emploi
+            2. Évaluer la correspondance entre votre profil et le poste
+            3. Générer des questions personnalisées
+            4. Fournir un feedback après chaque réponse
+            5. Produire un rapport détaillé à la fin
+            """)
 
 if __name__ == "__main__":
     main()
