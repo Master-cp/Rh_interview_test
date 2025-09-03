@@ -368,7 +368,7 @@ def speech_to_text():
         tmp_file.write(audio_input.getvalue())
         tmp_file.flush()
         tmp_path = tmp_file.name
-        try:
+    try:
             with open(tmp_path, "rb") as file:
                 transcription = client.audio.transcriptions.create(
                     file=(tmp_path, file.read()),
@@ -387,6 +387,7 @@ def speech_to_text():
         except Exception as e:
             return f"Erreur lors de la transcription: {e}"
 
+        
 # ------------------------------------------------------------
 # INTERFACE UTILISATEUR AMÉLIORÉE
 # ------------------------------------------------------------
