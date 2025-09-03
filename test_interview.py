@@ -415,6 +415,11 @@ def main():
     if "waiting_for_response" not in st.session_state:
         st.session_state.waiting_for_response = False
     
+    if "audio_data" not in st.session_state:
+        st.session_state.audio_data = None
+        st.session_state.transcription = None
+        st.session_state.show_transcription = False
+    
     # Sidebar avec configuration
     with st.sidebar:
         st.header("📤 Configuration de l'entretien")
@@ -480,19 +485,101 @@ def main():
                     st.json(profile)
             
             st.subheader("🎯 Mode réponse")
-            # Forcer le mode texte pour plus de fiabilité
-            input_mode = "📝 Texte"
-            st.info("Mode: 📝 Texte (recommandé)")
+            input_mode = st.radio("Choisissez:", ["🎤 Vocal", "📝 Texte"], index=0, key="input_mode")
 
-        # Gestion des réponses - Version simplifiée et fiable
+        # Gestion des réponses
         if st.session_state.waiting_for_response:
             st.write("---")
             st.subheader("💬 Votre réponse")
             
-            # Utiliser chat_input pour la saisie texte
-            user_input = st.chat_input("Tapez votre réponse ici et appuyez sur Entrée...")
+            user_input = None
+            submit_pressed = False
             
-            if user_input:
+            if input_mode == "🎤 Vocal":
+                # Section enregistrement vocal
+                st.info("🎤 Utilisez votre microphone pour répondre")
+                
+                # Enregistrement audio
+                audio_data = st.audio_input(
+                    "Parlez maintenant:",
+                    key="audio_recorder",
+                    help="Cliquez pour enregistrer votre réponse (5 secondes max)"
+                )
+                
+                if audio_data:
+                    st.session_state.audio_data = audio_data
+                    st.success("✅ Enregistrement terminé! Cliquez sur 'Transcrire' pour continuer.")
+                    
+                    # Bouton pour transcrire
+                    if st.button("🗣️ Transcrire l'audio", type="primary", key="transcribe_btn"):
+                        with st.spinner("Transcription en cours..."):
+                            try:
+                                # Sauvegarder temporairement
+                                with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
+                                    tmp_file.write(audio_data.getvalue())
+                                    tmp_path = tmp_file.name
+                                
+                                # Transcription avec Whisper
+                                with open(tmp_path, "rb") as file:
+                                    transcription = client.audio.transcriptions.create(
+                                        file=(tmp_path, file.read()),
+                                        model="whisper-large-v3-turbo",
+                                        response_format="text",
+                                        language="fr"
+                                    )
+                                
+                                os.unlink(tmp_path)
+                                
+                                if transcription and transcription.strip():
+                                    st.session_state.transcription = transcription
+                                    st.session_state.show_transcription = True
+                                    st.success("Transcription réussie!")
+                                else:
+                                    st.warning("Aucune parole détectée. Veuillez réessayer.")
+                                    
+                            except Exception as e:
+                                st.error(f"Erreur de transcription: {str(e)}")
+                
+                # Afficher la transcription si disponible
+                if st.session_state.show_transcription and st.session_state.transcription:
+                    st.write("**Transcription :**")
+                    st.info(st.session_state.transcription)
+                    
+                    # Éditer la transcription si nécessaire
+                    edited_transcription = st.text_area(
+                        "Modifiez la transcription si besoin:",
+                        value=st.session_state.transcription,
+                        height=100,
+                        key="edit_transcription"
+                    )
+                    
+                    # Boutons pour soumettre ou réenregistrer
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button("✅ Utiliser cette réponse", type="primary", key="use_audio_response"):
+                            user_input = edited_transcription
+                            submit_pressed = True
+                    with col2:
+                        if st.button("🔄 Réenregistrer", key="rerecord_btn"):
+                            st.session_state.audio_data = None
+                            st.session_state.transcription = None
+                            st.session_state.show_transcription = False
+                            st.rerun()
+            
+            else:  # Mode Texte
+                st.info("📝 Tapez votre réponse ci-dessous")
+                user_input = st.text_area(
+                    "Votre réponse:",
+                    height=150,
+                    key="text_response",
+                    placeholder="Écrivez votre réponse ici..."
+                )
+                
+                if st.button("✅ Soumettre la réponse", type="primary", key="submit_text_btn"):
+                    submit_pressed = True
+            
+            # Traitement de la réponse lorsqu'elle est soumise
+            if submit_pressed and user_input:
                 # Vérifier si le candidat veut arrêter
                 if st.session_state.agent.check_candidate_cannot_continue(user_input):
                     st.warning("Le candidat a demandé d'arrêter l'entretien.")
@@ -506,6 +593,9 @@ def main():
                 
                 # Désactiver l'attente de réponse pendant le traitement
                 st.session_state.waiting_for_response = False
+                st.session_state.audio_data = None
+                st.session_state.transcription = None
+                st.session_state.show_transcription = False
                 
                 # Génération question suivante
                 with st.spinner("🔍 Analyse de votre réponse et génération de la prochaine question..."):
@@ -575,29 +665,16 @@ def main():
         1. 📤 Téléversez votre CV en format PDF
         2. 📝 Collez la description du poste
         3. 🔍 Cliquez sur \"Analyser et démarrer\"
-        4. 💬 Répondez aux questions de l'assistant
+        4. 🎤 Répondez aux questions avec votre voix ou par texte
         """)
         
-        # Exemple de format attendu
-        with st.expander("📋 Exemple de format pour la description de poste"):
-            st.write("""
-            **Titre du poste:** Développeur Fullstack Senior
-            
-            **Missions principales:**
-            - Développement d'applications web React/Node.js
-            - Collaboration avec l'équipe produit
-            - Maintenance et évolution du code existant
-            
-            **Compétences requises:**
-            - 5+ ans d'expérience en développement JavaScript
-            - Maîtrise de React, Node.js, PostgreSQL
-            - Expérience en agile/scrum
-            
-            **Qualités recherchées:**
-            - Autonomie et proactivité
-            - Bonne communication
-            - Esprit d'équipe
-            """)
+        # Section démo vocale
+        with st.expander("🎤 Testez votre microphone", expanded=False):
+            st.info("Vérifiez que votre microphone fonctionne correctement")
+            test_audio = st.audio_input("Test d'enregistrement", key="test_mic")
+            if test_audio:
+                st.audio(test_audio)
+                st.success("✅ Microphone fonctionnel!")
 
 if __name__ == "__main__":
     main()
