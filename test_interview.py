@@ -360,7 +360,6 @@ def text_to_speech(text):
         return None
 
 def speech_to_text():
-    def speech_to_text():
     """Reconnaissance vocale via upload de fichier audio"""
     import tempfile
     import io
