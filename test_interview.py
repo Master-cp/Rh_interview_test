@@ -415,21 +415,20 @@ def main():
     if "waiting_for_response" not in st.session_state:
         st.session_state.waiting_for_response = False
     
-    if "audio_recorded" not in st.session_state:
-        st.session_state.audio_recorded = False
-    
     # Sidebar avec configuration
     with st.sidebar:
         st.header("📤 Configuration de l'entretien")
-        cv_file = st.file_uploader("Téléversez votre CV (PDF)", type="pdf")
+        cv_file = st.file_uploader("Téléversez votre CV (PDF)", type="pdf", key="cv_uploader")
         job_desc = st.text_area("Description du poste", height=150,
-                              placeholder="Copiez-collez l'offre d'emploi complète")
+                              placeholder="Copiez-collez l'offre d'emploi complète",
+                              key="job_desc_input")
         
-        if st.button("🔍 Analyser et démarrer", type="primary"):
+        if st.button("🔍 Analyser et démarrer", type="primary", key="start_analysis"):
             if cv_file and job_desc:
                 with st.spinner("Analyse approfondie en cours..."):
                     st.session_state.agent.initialize_interview(cv_file, job_desc)
                     st.session_state.waiting_for_response = True
+                    st.session_state.messages = []  # Réinitialiser les messages
                     
                 # Affichage du résumé
                 st.success("Analyse terminée!")
@@ -441,6 +440,9 @@ def main():
                     "Qualités": summary["qualites_comportementales"],
                     "Niveau": summary["niveau_experience"]
                 })
+                
+                # Forcer le rerun pour afficher la première question
+                st.rerun()
             else:
                 st.error("Veuillez fournir CV et description de poste")
     
@@ -464,7 +466,8 @@ def main():
 
         with col2:
             st.subheader("📊 Progression")
-            st.progress(st.session_state.agent.question_count / st.session_state.agent.max_questions)
+            progress_value = st.session_state.agent.question_count / st.session_state.agent.max_questions
+            st.progress(progress_value)
             st.caption(f"{st.session_state.agent.question_count} questions posées sur {st.session_state.agent.max_questions}")
             
             st.subheader("📊 Profil candidat")
@@ -477,89 +480,67 @@ def main():
                     st.json(profile)
             
             st.subheader("🎯 Mode réponse")
-            input_mode = st.radio("Choisissez:", ["🎤 Vocal", "📝 Texte"], index=0, key="input_mode")
+            # Forcer le mode texte pour plus de fiabilité
+            input_mode = "📝 Texte"
+            st.info("Mode: 📝 Texte (recommandé)")
 
-        # Gestion des réponses
+        # Gestion des réponses - Version simplifiée et fiable
         if st.session_state.waiting_for_response:
-            user_input = None
+            st.write("---")
+            st.subheader("💬 Votre réponse")
             
-            if input_mode == "🎤 Vocal":
-                # Réinitialiser l'état audio si on vient de changer de mode
-                if st.session_state.get('last_input_mode') != "🎤 Vocal":
-                    st.session_state.audio_recorded = False
-                    st.session_state.last_input_mode = "🎤 Vocal"
-                
-                if not st.session_state.audio_recorded:
-                    user_input = speech_to_text()
-                    
-                    if user_input and user_input != "En attente d'un enregistrement audio...":
-                        if user_input.startswith("Erreur") or user_input == "Aucune parole détectée. Veuillez réessayer.":
-                            st.warning(user_input)
-                        else:
-                            st.success("Transcription réussie!")
-                            st.write(f"**Vous avez dit :** {user_input}")
-                            st.session_state.audio_recorded = True
-                            
-                            # Bouton pour confirmer ou réenregistrer
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                if st.button("✅ Utiliser cette transcription", type="primary"):
-                                    pass  # Le traitement se fera plus bas
-                            with col2:
-                                if st.button("🔄 Réenregistrer"):
-                                    st.session_state.audio_recorded = False
-                                    st.rerun()
-                else:
-                    # Utiliser la transcription déjà effectuée
-                    user_input = st.session_state.get('last_transcription', '')
+            # Utiliser chat_input pour la saisie texte
+            user_input = st.chat_input("Tapez votre réponse ici et appuyez sur Entrée...")
             
-            else:  # Mode Texte
-                user_input = st.chat_input("Tapez votre réponse ici...")
-                st.session_state.last_input_mode = "📝 Texte"
-            
-            # Traitement de la réponse lorsque l'utilisateur a fourni une entrée
-            if user_input and not user_input.startswith("Erreur") and user_input != "Aucune parole détectée. Veuillez réessayer.":
-                if st.button("✅ Soumettre la réponse", type="primary") or input_mode == "📝 Texte":
-                    # Vérifier si le candidat veut arrêter
-                    if st.session_state.agent.check_candidate_cannot_continue(user_input):
-                        st.warning("Le candidat a demandé d'arrêter l'entretien.")
-                        st.session_state.agent.phase = "evaluation"
-                        st.rerun()
-                        return
-                    
-                    # Traitement de la réponse
-                    st.session_state.agent.history.append(("candidat", user_input))
-                    st.session_state.messages.append({"role": "user", "content": user_input})
-                    st.session_state.waiting_for_response = False
-                    st.session_state.audio_recorded = False
-                    
-                    # Génération question suivante
-                    with st.spinner("🔍 Analyse et génération de la prochaine question..."):
-                        evaluation = st.session_state.agent.evaluate_response(user_input)
-                        question = st.session_state.agent.generate_contextual_question(user_input)
-                        
-                        # Vérifier si c'est le message de remerciement final
-                        if "merci beaucoup" in question.lower() or "évaluation finale" in question.lower():
-                            st.session_state.agent.add_system_message(question)
-                            st.session_state.agent.phase = "evaluation"
-                        else:
-                            st.session_state.agent.add_system_message(question)
-                    
-                    # Affichage feedback
-                    with st.expander("📝 Feedback immédiat", expanded=True):
-                        st.info(evaluation)
-                    
-                    st.session_state.waiting_for_response = True
+            if user_input:
+                # Vérifier si le candidat veut arrêter
+                if st.session_state.agent.check_candidate_cannot_continue(user_input):
+                    st.warning("Le candidat a demandé d'arrêter l'entretien.")
+                    st.session_state.agent.phase = "evaluation"
                     st.rerun()
+                    return
+                
+                # Ajouter la réponse du candidat à l'historique
+                st.session_state.agent.history.append(("candidat", user_input))
+                st.session_state.messages.append({"role": "user", "content": user_input})
+                
+                # Désactiver l'attente de réponse pendant le traitement
+                st.session_state.waiting_for_response = False
+                
+                # Génération question suivante
+                with st.spinner("🔍 Analyse de votre réponse et génération de la prochaine question..."):
+                    # Évaluation de la réponse
+                    evaluation = st.session_state.agent.evaluate_response(user_input)
+                    
+                    # Génération de la question suivante
+                    question = st.session_state.agent.generate_contextual_question(user_input)
+                    
+                    # Ajouter la question à l'historique
+                    st.session_state.agent.add_system_message(question)
+                    
+                    # Vérifier si c'est la fin de l'entretien
+                    if "merci beaucoup" in question.lower() or "évaluation finale" in question.lower():
+                        st.session_state.agent.phase = "evaluation"
+                
+                # Afficher le feedback
+                st.success("✅ Réponse enregistrée avec succès!")
+                with st.expander("📝 Feedback immédiat", expanded=True):
+                    st.info(evaluation)
+                
+                # Réactiver l'attente de réponse pour la prochaine question
+                st.session_state.waiting_for_response = True
+                
+                # Forcer le rerun pour afficher la nouvelle question
+                st.rerun()
 
-        # Bouton terminer
+        # Bouton pour terminer l'entretien manuellement
         if st.session_state.waiting_for_response:
-            if st.button("✅ Terminer l'entretien", type="primary"):
+            if st.button("✅ Terminer l'entretien", type="primary", key="end_interview"):
                 st.session_state.agent.phase = "evaluation"
                 st.rerun()
 
     # Évaluation finale
-    if st.session_state.agent.phase == "evaluation":
+    elif st.session_state.agent.phase == "evaluation":
         st.header("📊 Rapport de Performance Final")
         
         with st.spinner("📊 Génération du rapport détaillé..."):
@@ -576,13 +557,47 @@ def main():
                 "💾 Exporter le rapport",
                 evaluation,
                 file_name="rapport_entretien.md",
-                mime="text/markdown"
+                mime="text/markdown",
+                key="download_report"
             )
             
-            if st.button("🔄 Nouvel entretien"):
+            if st.button("🔄 Nouvel entretien", key="new_interview"):
+                # Réinitialisation complète
                 for key in list(st.session_state.keys()):
                     del st.session_state[key]
                 st.rerun()
+    
+    # État initial - avant le démarrage de l'entretien
+    else:
+        st.info("👋 Bienvenue! Veuillez configurer l'entretien dans la sidebar à gauche.")
+        st.write("""
+        ### Instructions :
+        1. 📤 Téléversez votre CV en format PDF
+        2. 📝 Collez la description du poste
+        3. 🔍 Cliquez sur \"Analyser et démarrer\"
+        4. 💬 Répondez aux questions de l'assistant
+        """)
+        
+        # Exemple de format attendu
+        with st.expander("📋 Exemple de format pour la description de poste"):
+            st.write("""
+            **Titre du poste:** Développeur Fullstack Senior
+            
+            **Missions principales:**
+            - Développement d'applications web React/Node.js
+            - Collaboration avec l'équipe produit
+            - Maintenance et évolution du code existant
+            
+            **Compétences requises:**
+            - 5+ ans d'expérience en développement JavaScript
+            - Maîtrise de React, Node.js, PostgreSQL
+            - Expérience en agile/scrum
+            
+            **Qualités recherchées:**
+            - Autonomie et proactivité
+            - Bonne communication
+            - Esprit d'équipe
+            """)
 
 if __name__ == "__main__":
     main()
