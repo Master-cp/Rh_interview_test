@@ -360,9 +360,7 @@ def text_to_speech(text):
 def speech_to_text():
     """Reconnaissance vocale via l'enregistrement audio (Streamlit + Whisper)"""
     st.info("🎤 Enregistrez votre réponse vocale")
-    
-    # Option 1 : utiliser st.audio_input (Streamlit 1.49+)
-    audio_input = st.audio_input("Cliquez pour démarrer l'enregistrement")
+        audio_input = st.audio_input("Cliquez pour démarrer l'enregistrement")
     if audio_input:
         st.audio(audio_input, format="audio/wav")
         # Sauvegarde temporaire du fichier audio
@@ -371,15 +369,15 @@ def speech_to_text():
         tmp_file.flush()
         tmp_path = tmp_file.name
         try:
-            with open(tmp_path, "rb") as f:
+            with open(tmp_path, "rb") as file:
                 transcription = client.audio.transcriptions.create(
-                    file=f,
+                    file=(tmp_path, file.read()),
                     model="whisper-large-v3-turbo",
-                    response_format="text",
+                    response_format="verbose_json",
                     language="fr"
                 )
-            result = transcription.text.strip()
-            return result or "Aucune parole détectée. Veuillez réessayer."
+
+            return transcription.text or "Aucune parole détectée. Veuillez réessayer."
         except Exception as e:
             return f"Erreur lors de la transcription: {e}"
         finally:
