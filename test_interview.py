@@ -233,7 +233,7 @@ class RecruitingAgent:
             thank_you_message = (
                 "Merci beaucoup pour vos réponses. Nous avons maintenant suffisamment "
                 "d'éléments pour évaluer votre candidature. "
-                "Passons à l'évaluation finale de votre profil."
+                "Passons maintenant à l'évaluation finale de votre profil."
             )
             return thank_you_message
         
@@ -312,7 +312,7 @@ class RecruitingAgent:
         RÉPONSE À ÉVALUER:
         {user_response}
 
-        [CRITÈRES D'ÉVALUATION]
+        [CRITÈRS D'ÉVALUATION]
         1. Pertinence (1-5) : Adéquation avec la question posée
         2. Détail technique (1-5) : Précision des informations
         3. Adéquation poste (1-5) : Lien avec les exigences du poste
@@ -528,152 +528,163 @@ def main():
         with col3:
             st.metric("⚠️ Points d'écart", len(analysis['points_ecart']))
         
-        # Interface d'entretien
-        col1, col2 = st.columns([2, 1])
-        
-        with col1:
-            st.header("💬 Entretien en cours")
-            st.caption(f"Question {st.session_state.agent.question_count}/{st.session_state.agent.max_questions}")
+        # Vérifier si l'entretien est terminé
+        if st.session_state.agent.phase == "evaluation":
+            st.header("📊 Rapport de Performance Final")
             
-            # Affichage messages
-            for msg in st.session_state.messages:
-                avatar = "🤖" if msg["role"] == "assistant" else "👤"
-                with st.chat_message(msg["role"], avatar=avatar):
-                    st.write(msg["content"])
-                    if msg["role"] == "assistant":
-                        audio_file = text_to_speech(msg["content"])
-                        if audio_file:
-                            st.audio(audio_file)
-
-        with col2:
-            st.subheader("📊 Progression")
-            progress_value = st.session_state.agent.question_count / st.session_state.agent.max_questions
-            st.progress(progress_value)
-            st.caption(f"{st.session_state.agent.question_count} questions posées sur {st.session_state.agent.max_questions}")
+            with st.spinner("📊 Génération du rapport détaillé..."):
+                evaluation = st.session_state.agent.evaluate_performance()
             
-            st.subheader("📊 Profil candidat")
-            if st.session_state.agent.candidate_profile:
-                profile = st.session_state.agent.candidate_profile
-                st.metric("Compétences identifiées", len(profile['competences_identifiees']))
-                st.metric("Expériences clés", len(profile['experiences_cles']))
-                
-                with st.expander("Détails du profil"):
-                    st.json(profile)
+            col1, col2 = st.columns([2, 1])
             
-            st.subheader("🎯 Mode réponse")
-            input_mode = st.radio("Choisissez:", ["📝 Texte", "🎤 Vocal"], index=0, key="input_mode")
-
-        # Gestion des réponses
-        if st.session_state.waiting_for_response:
-            st.write("---")
-            st.subheader("💬 Votre réponse")
+            with col1:
+                with st.expander("📝 Rapport Complet", expanded=True):
+                    st.markdown(evaluation)
             
-            user_input = None
-            current_count = st.session_state.response_count
-            
-            if input_mode == "🎤 Vocal":
-                st.info("🎤 Utilisez votre microphone pour répondre")
-                
-                # Enregistrement audio avec une clé unique
-                audio_data = st.audio_input(
-                    "Parlez maintenant:",
-                    key=f"audio_recorder_{current_count}",
-                    help="Cliquez pour enregistrer votre réponse"
+            with col2:
+                st.download_button(
+                    "💾 Exporter le rapport",
+                    evaluation,
+                    file_name="rapport_entretien.md",
+                    mime="text/markdown",
+                    key="download_report"
                 )
                 
-                if audio_data:
-                    with st.spinner("Transcription en cours..."):
-                        user_input = speech_to_text(audio_data)
-                        if user_input and not user_input.startswith("Erreur"):
-                            st.success("✅ Transcription réussie!")
-                            st.write(f"**Transcription :** {user_input}")
-            
-            else:  # Mode Texte
-                st.info("📝 Tapez votre réponse ci-dessous")
-                user_input = st.text_area(
-                    "Votre réponse:",
-                    height=150,
-                    key=f"text_response_{current_count}",
-                    placeholder="Écrivez votre réponse ici..."
-                )
-            
-            # Bouton de soumission
-            if user_input and st.button("✅ Soumettre la réponse", type="primary", key=f"submit_{current_count}"):
-                # Vérifier si le candidat veut arrêter
-                if st.session_state.agent.check_candidate_cannot_continue(user_input):
-                    st.warning("Le candidat a demandé d'arrêter l'entretien.")
-                    st.session_state.agent.phase = "evaluation"
+                if st.button("🔄 Nouvel entretien", key="new_interview"):
+                    # Réinitialisation complète
+                    for key in list(st.session_state.keys()):
+                        del st.session_state[key]
                     st.rerun()
-                    return
-                
-                # Ajouter la réponse du candidat à l'historique
-                st.session_state.agent.history.append(("candidat", user_input))
-                st.session_state.messages.append({"role": "user", "content": user_input})
-                
-                # Désactiver l'attente de réponse pendant le traitement
-                st.session_state.waiting_for_response = False
-                st.session_state.response_count += 1
-                
-                # Génération question suivante
-                with st.spinner("🔍 Analyse de votre réponse et génération de la prochaine question..."):
-                    # Évaluation de la réponse
-                    evaluation = st.session_state.agent.evaluate_response(user_input)
-                    
-                    # Génération de la question suivante
-                    question = st.session_state.agent.generate_contextual_question(user_input)
-                    
-                    # Ajouter la question à l'historique
-                    st.session_state.agent.add_system_message(question)
-                    
-                    # Vérifier si c'est la fin de l'entretien
-                    if "merci beaucoup" in question.lower() or "évaluation finale" in question.lower():
-                        st.session_state.agent.phase = "evaluation"
-                
-                # Afficher le feedback
-                st.success("✅ Réponse enregistrée avec succès!")
-                with st.expander("📝 Feedback immédiat", expanded=True):
-                    st.info(evaluation)
-                
-                # Réactiver l'attente de réponse pour la prochaine question
-                st.session_state.waiting_for_response = True
-                
-                # Forcer le rerun pour afficher la nouvelle question
-                st.rerun()
-
-        # Bouton pour terminer l'entretien manuellement
-        if st.session_state.waiting_for_response:
-            if st.button("✅ Terminer l'entretien", type="primary", key="end_interview"):
-                st.session_state.agent.phase = "evaluation"
-                st.rerun()
-
-    # Évaluation finale
-    elif st.session_state.agent.phase == "evaluation":
-        st.header("📊 Rapport de Performance Final")
         
-        with st.spinner("📊 Génération du rapport détaillé..."):
-            evaluation = st.session_state.agent.evaluate_performance()
-        
-        col1, col2 = st.columns([2, 1])
-        
-        with col1:
-            with st.expander("📝 Rapport Complet", expanded=True):
-                st.markdown(evaluation)
-        
-        with col2:
-            st.download_button(
-                "💾 Exporter le rapport",
-                evaluation,
-                file_name="rapport_entretien.md",
-                mime="text/markdown",
-                key="download_report"
-            )
+        else:
+            # Interface d'entretien en cours
+            col1, col2 = st.columns([2, 1])
             
-            if st.button("🔄 Nouvel entretien", key="new_interview"):
-                # Réinitialisation complète
-                for key in list(st.session_state.keys()):
-                    del st.session_state[key]
-                st.rerun()
-    
+            with col1:
+                st.header("💬 Entretien en cours")
+                st.caption(f"Question {st.session_state.agent.question_count}/{st.session_state.agent.max_questions}")
+                
+                # Affichage messages
+                for msg in st.session_state.messages:
+                    avatar = "🤖" if msg["role"] == "assistant" else "👤"
+                    with st.chat_message(msg["role"], avatar=avatar):
+                        st.write(msg["content"])
+                        if msg["role"] == "assistant":
+                            audio_file = text_to_speech(msg["content"])
+                            if audio_file:
+                                st.audio(audio_file)
+
+            with col2:
+                st.subheader("📊 Progression")
+                progress_value = st.session_state.agent.question_count / st.session_state.agent.max_questions
+                st.progress(progress_value)
+                st.caption(f"{st.session_state.agent.question_count} questions posées sur {st.session_state.agent.max_questions}")
+                
+                st.subheader("📊 Profil candidat")
+                if st.session_state.agent.candidate_profile:
+                    profile = st.session_state.agent.candidate_profile
+                    st.metric("Compétences identifiées", len(profile['competences_identifiees']))
+                    st.metric("Expériences clés", len(profile['experiences_cles']))
+                    
+                    with st.expander("Détails du profil"):
+                        st.json(profile)
+                
+                st.subheader("🎯 Mode réponse")
+                input_mode = st.radio("Choisissez:", ["📝 Texte", "🎤 Vocal"], index=0, key="input_mode")
+
+            # Gestion des réponses
+            if st.session_state.waiting_for_response:
+                st.write("---")
+                st.subheader("💬 Votre réponse")
+                
+                user_input = None
+                current_count = st.session_state.response_count
+                
+                if input_mode == "🎤 Vocal":
+                    st.info("🎤 Utilisez votre microphone pour répondre")
+                    
+                    # Enregistrement audio avec une clé unique
+                    audio_data = st.audio_input(
+                        "Parlez maintenant:",
+                        key=f"audio_recorder_{current_count}",
+                        help="Cliquez pour enregistrer votre réponse"
+                    )
+                    
+                    if audio_data:
+                        with st.spinner("Transcription en cours..."):
+                            user_input = speech_to_text(audio_data)
+                            if user_input and not user_input.startswith("Erreur"):
+                                st.success("✅ Transcription réussie!")
+                                st.write(f"**Transcription :** {user_input}")
+                
+                else:  # Mode Texte
+                    st.info("📝 Tapez votre réponse ci-dessous")
+                    user_input = st.text_area(
+                        "Votre réponse:",
+                        height=150,
+                        key=f"text_response_{current_count}",
+                        placeholder="Écrivez votre réponse ici..."
+                    )
+                
+                # Bouton de soumission
+                if user_input and st.button("✅ Soumettre la réponse", type="primary", key=f"submit_{current_count}"):
+                    # Vérifier si le candidat veut arrêter
+                    if st.session_state.agent.check_candidate_cannot_continue(user_input):
+                        st.warning("Le candidat a demandé d'arrêter l'entretien.")
+                        st.session_state.agent.phase = "evaluation"
+                        st.rerun()
+                        return
+                    
+                    # Ajouter la réponse du candidat à l'historique
+                    st.session_state.agent.history.append(("candidat", user_input))
+                    st.session_state.messages.append({"role": "user", "content": user_input})
+                    
+                    # Désactiver l'attente de réponse pendant le traitement
+                    st.session_state.waiting_for_response = False
+                    st.session_state.response_count += 1
+                    
+                    # Génération question suivante
+                    with st.spinner("🔍 Analyse de votre réponse et génération de la prochaine question..."):
+                        # Évaluation de la réponse
+                        evaluation = st.session_state.agent.evaluate_response(user_input)
+                        
+                        # Génération de la question suivante
+                        question = st.session_state.agent.generate_contextual_question(user_input)
+                        
+                        # Vérifier si c'est la fin de l'entretien (après 6 questions)
+                        if st.session_state.agent.question_count >= st.session_state.agent.max_questions:
+                            st.session_state.agent.phase = "evaluation"
+                            # Ajouter le message de remerciement
+                            thank_you_message = (
+                                "Merci beaucoup pour vos réponses. Nous avons maintenant suffisamment "
+                                "d'éléments pour évaluer votre candidature. "
+                                "Passons maintenant à l'évaluation finale de votre profil."
+                            )
+                            st.session_state.agent.add_system_message(thank_you_message)
+                        else:
+                            # Ajouter la question à l'historique
+                            st.session_state.agent.add_system_message(question)
+                    
+                    # Afficher le feedback
+                    st.success("✅ Réponse enregistrée avec succès!")
+                    with st.expander("📝 Feedback immédiat", expanded=True):
+                        st.info(evaluation)
+                    
+                    # Réactiver l'attente de réponse pour la prochaine question
+                    st.session_state.waiting_for_response = True
+                    
+                    # Forcer le rerun pour afficher la nouvelle question
+                    st.rerun()
+
+            # Bouton pour terminer l'entretien manuellement
+            if st.session_state.waiting_for_response:
+                if st.button("✅ Terminer l'entretien maintenant", type="primary", key="end_interview"):
+                    st.session_state.agent.phase = "evaluation"
+                    # Ajouter un message de fin
+                    end_message = "L'entretien a été terminé à votre demande. Merci pour votre participation."
+                    st.session_state.agent.add_system_message(end_message)
+                    st.rerun()
+
     # État initial - avant le démarrage de l'entretien
     else:
         st.info("👋 Bienvenue! Veuillez configurer l'entretien dans la sidebar à gauche.")
