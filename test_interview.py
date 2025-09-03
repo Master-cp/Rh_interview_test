@@ -371,7 +371,8 @@ def speech_to_text():
                           stop_style={},
                           show_visualizer=True,
                           key=None)
-
+     # Afficher l'audio enregistré
+     st.audio(audio.export().read())
     if audio is not None and len(audio) > 0:
         try:
             # Sauvegarder temporairement les données audio
@@ -379,8 +380,7 @@ def speech_to_text():
                 audio.export(tmp_file.name, format="wav")
                 tmp_path = tmp_file.name
 
-            # Afficher l'audio enregistré
-            st.audio(audio.export().read())
+           
 
             # Transcription avec Whisper
             with open(tmp_path, "rb") as file:
@@ -488,7 +488,7 @@ def main():
             user_input = None
             
             if input_mode == "🎤 Vocal":
-                if st.button("⏺️ Démarrer l'enregistrement", type="secondary"):
+                #if st.button("⏺️ Démarrer l'enregistrement", type="secondary"):
                     with st.spinner("Enregistrement en cours..."):
                         user_input = speech_to_text()
                         if user_input:
