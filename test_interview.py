@@ -457,6 +457,9 @@ def main():
     if "analysis_complete" not in st.session_state:
         st.session_state.analysis_complete = False
     
+    if "response_count" not in st.session_state:
+        st.session_state.response_count = 0
+    
     # Sidebar avec configuration
     with st.sidebar:
         st.header("📤 Configuration de l'entretien")
@@ -471,6 +474,7 @@ def main():
                 st.session_state.messages = []
                 st.session_state.waiting_for_response = False
                 st.session_state.analysis_complete = False
+                st.session_state.response_count = 0
                 
                 # Analyse préliminaire
                 with st.spinner("📊 Analyse approfondie en cours..."):
@@ -559,20 +563,21 @@ def main():
             st.subheader("🎯 Mode réponse")
             input_mode = st.radio("Choisissez:", ["📝 Texte", "🎤 Vocal"], index=0, key="input_mode")
 
+        # Gestion des réponses
         if st.session_state.waiting_for_response:
             st.write("---")
             st.subheader("💬 Votre réponse")
             
             user_input = None
+            current_count = st.session_state.response_count
             
             if input_mode == "🎤 Vocal":
                 st.info("🎤 Utilisez votre microphone pour répondre")
                 
-                # Enregistrement audio avec une clé unique basée sur le temps
-                unique_key = f"audio_recorder_{time.time()}"
+                # Enregistrement audio avec une clé unique
                 audio_data = st.audio_input(
                     "Parlez maintenant:",
-                    key=unique_key,
+                    key=f"audio_recorder_{current_count}",
                     help="Cliquez pour enregistrer votre réponse"
                 )
                 
@@ -588,13 +593,13 @@ def main():
                 user_input = st.text_area(
                     "Votre réponse:",
                     height=150,
-                    key=f"text_response_{time.time()}",
+                    key=f"text_response_{current_count}",
                     placeholder="Écrivez votre réponse ici..."
                 )
             
-            # Bouton de soumission avec clé unique
-            if user_input and st.button("✅ Soumettre la réponse", type="primary", key=f"submit_{time.time()}"):
-                        # Vérifier si le candidat veut arrêter
+            # Bouton de soumission
+            if user_input and st.button("✅ Soumettre la réponse", type="primary", key=f"submit_{current_count}"):
+                # Vérifier si le candidat veut arrêter
                 if st.session_state.agent.check_candidate_cannot_continue(user_input):
                     st.warning("Le candidat a demandé d'arrêter l'entretien.")
                     st.session_state.agent.phase = "evaluation"
@@ -607,6 +612,7 @@ def main():
                 
                 # Désactiver l'attente de réponse pendant le traitement
                 st.session_state.waiting_for_response = False
+                st.session_state.response_count += 1
                 
                 # Génération question suivante
                 with st.spinner("🔍 Analyse de votre réponse et génération de la prochaine question..."):
