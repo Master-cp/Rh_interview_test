@@ -359,9 +359,7 @@ def text_to_speech(text):
 
 def speech_to_text():
      """Reconnaissance vocale via l'enregistrement audio"""
-    
     st.info("🎤 Enregistrez votre réponse vocale")
-    
     # Utilisation de audiorecorder pour l'enregistrement vocal
     audio = audiorecorder("🎤 Cliquez pour enregistrer", "⏹️ Cliquez pour arrêter")
     
