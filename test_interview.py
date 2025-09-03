@@ -9,13 +9,10 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from gtts import gTTS
 from io import BytesIO
-import speech_recognition as sr
 import os
 import time
 import json
 import numpy as np
-from audiorecorder import audiorecorder
-
 
 # Initialisation du client Polly
 polly_client = boto3.client('polly',
@@ -339,10 +336,10 @@ def text_to_speech(text):
         
         # Appel AWS Polly API TTS
         response = polly_client.synthesize_speech(
-            Engine='generative',
+            Engine='neural',
             OutputFormat='mp3',
             Text=text,
-            VoiceId='Liam',
+            VoiceId='Lea',
             TextType='text'
         )
         
@@ -356,46 +353,47 @@ def text_to_speech(text):
     except Exception as e:
         print(f"Erreur lors de la synthèse vocale: {e}")
         return None
-#############################################################################
+
 def speech_to_text():
-    """Reconnaissance vocale via l'enregistrement audio (Streamlit + Whisper)"""
-    if "audio_captured" not in st.session_state:
-        st.session_state.audio_captured = None
+    """Reconnaissance vocale via l'audio input de Streamlit"""
+    st.info("🎤 Enregistrez votre réponse (fonctionnalité en développement)")
+    
+    # Utilisation de st.audio_input
+    audio_data = st.audio_input(
+        "Parlez maintenant:",
+        key="audio_recorder",
+        help="Cliquez pour enregistrer votre réponse vocale"
+    )
+    
+    if audio_data is not None:
+        try:
+            # Sauvegarder temporairement
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
+                tmp_file.write(audio_data.getvalue())
+                tmp_path = tmp_file.name
+            
+            # Transcription avec Whisper
+            with open(tmp_path, "rb") as file:
+                transcription = client.audio.transcriptions.create(
+                    file=(tmp_path, file.read()),
+                    model="whisper-large-v3-turbo",
+                    response_format="text",
+                    language="fr"
+                )
+            
+            # Nettoyage
+            os.unlink(tmp_path)
+            
+            if transcription.strip():
+                return transcription
+            else:
+                return "Aucune parole détectée. Veuillez réessayer."
+            
+        except Exception as e:
+            return f"Erreur technique: {str(e)}"
+    
+    return None
 
-    # Widget d'enregistrement (affiché seulement si rien n'est en cours)
-    if st.session_state.audio_captured is None:
-        audio_input = st.audio_input("🎤 Cliquez pour démarrer l'enregistrement")
-        if audio_input:
-            st.session_state.audio_captured = audio_input
-            st.rerun()
-        return "En attente d'un enregistrement audio..."
-
-    try:
-        # Sauvegarde temporaire
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
-            tmp_file.write(st.session_state.audio_captured.getvalue())
-            tmp_path = tmp_file.name
-
-        # Transcription avec Whisper
-        with open(tmp_path, "rb") as file:
-            transcription = client.audio.transcriptions.create(
-                file=file,
-                model="whisper-1",
-                response_format="text",
-                language="fr"
-            )
-
-        # Nettoyage après transcription
-        os.unlink(tmp_path)
-        st.session_state.audio_captured = None  # Réinitialise pour prochain enregistrement
-
-        # Retourne le texte transcrit
-        return transcription.strip() if transcription.strip() else "Aucune parole détectée. Veuillez réessayer."
-
-    except Exception as e:
-        # Réinitialise en cas d'erreur pour éviter les blocages
-        st.session_state.audio_captured = None
-        return f"Erreur lors de la transcription : {str(e)}"
 # ------------------------------------------------------------
 # INTERFACE UTILISATEUR AMÉLIORÉE
 # ------------------------------------------------------------
@@ -436,8 +434,6 @@ def main():
                     "Qualités": summary["qualites_comportementales"],
                     "Niveau": summary["niveau_experience"]
                 })
-                
-                st.rerun()
             else:
                 st.error("Veuillez fournir CV et description de poste")
     
@@ -474,19 +470,17 @@ def main():
                     st.json(profile)
             
             st.subheader("🎯 Mode réponse")
-            input_mode = st.radio("Choisissez:", ["🎤 Vocal", "📝 Texte"], index=1)
+            input_mode = st.radio("Choisissez:", ["📝 Texte"], index=0)
 
         # Gestion des réponses
         if st.session_state.waiting_for_response:
             user_input = None
             
             if input_mode == "🎤 Vocal":
-                #if st.button("⏺️ Démarrer l'enregistrement", type="secondary"):
-                    with st.spinner("Enregistrement en cours..."):
-                        user_input = speech_to_text()
-                        if user_input:
-                            st.success("Transcription réussie!")
-                            st.write(f"**Vous avez dit :** {user_input}")
+                user_input = speech_to_text()
+                if user_input and user_input != "En attente d'un enregistrement audio...":
+                    st.success("Transcription réussie!")
+                    st.write(f"**Vous avez dit :** {user_input}")
             else:
                 user_input = st.chat_input("Tapez votre réponse ici...")
             
@@ -512,7 +506,6 @@ def main():
                     if "merci beaucoup" in question.lower() or "évaluation finale" in question.lower():
                         st.session_state.agent.add_system_message(question)
                         st.session_state.agent.phase = "evaluation"
-                        st.rerun()
                     else:
                         st.session_state.agent.add_system_message(question)
                 
@@ -551,7 +544,8 @@ def main():
             )
             
             if st.button("🔄 Nouvel entretien"):
-                st.session_state.clear()
+                for key in list(st.session_state.keys()):
+                    del st.session_state[key]
                 st.rerun()
 
 if __name__ == "__main__":
