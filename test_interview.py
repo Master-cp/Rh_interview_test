@@ -361,7 +361,16 @@ def speech_to_text():
     """Reconnaissance vocale via l'enregistrement audio"""
     st.info("🎤 Enregistrez votre réponse vocale")
     # Utilisation de audiorecorder pour l'enregistrement vocal
-    audio = audiorecorder("🎤 Cliquez pour enregistrer", "⏹️ Cliquez pour arrêter")
+    audio = audiorecorder(
+                          start_prompt="Start recording",
+                          stop_prompt="Stop recording",
+                          pause_prompt="",
+                          custom_style={'color': 'black'},
+                          start_style={},
+                          pause_style={},
+                          stop_style={},
+                          show_visualizer=True,
+                          key=None)
 
     if audio is not None and len(audio) > 0:
         try:
